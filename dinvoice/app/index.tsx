@@ -13,11 +13,17 @@ import {
   ActivityIndicator,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState(1); // 1 = login, 2 = verify OTP
   const [loading, setLoading] = useState(false);
 
+  const BASE_URL = "http://192.168.18.29:5000/api/auth"; // 👈 your backend
+
+  // Step 1 — Request OTP
   const handleLogin = async () => {
     if (!email || !password) {
       alert("Please fill all fields!");
@@ -26,34 +32,62 @@ export default function Login() {
 
     try {
       setLoading(true);
-
-      const res = await fetch("http://192.168.18.29:5000/api/auth/login", {
-        // ⚠️ Use your backend IP if testing on phone:
-        // e.g. "http://192.168.1.100:5000/api/auth/login"
+      const res = await fetch(`${BASE_URL}/login`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
       const data = await res.json();
-      console.log("Login response:", data);
+      console.log("Login step 1:", data);
 
       if (!res.ok) {
         alert(data.error || "Login failed");
         return;
       }
 
-      // ✅ Save token and user in storage
+      alert("OTP has been sent to your email!");
+      setStep(2);
+    } catch (error) {
+      console.error("Login error:", error);
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2 — Verify OTP
+  const handleVerifyOtp = async () => {
+    if (!otp) {
+      alert("Please enter OTP!");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await fetch(`${BASE_URL}/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp }),
+      });
+
+      const data = await res.json();
+      console.log("Verify OTP:", data);
+
+      if (!res.ok) {
+        alert(data.error || "Invalid OTP");
+        return;
+      }
+
+      // ✅ Save token and user
       await AsyncStorage.setItem("token", data.token);
       await AsyncStorage.setItem("user", JSON.stringify(data.user));
 
       alert("Login successful!");
       router.push("/pages/dashboard");
     } catch (error) {
-      console.error("Login error:", error);
-      alert("Something went wrong. Please try again.");
+      console.error("OTP verification error:", error);
+      alert("Something went wrong.");
     } finally {
       setLoading(false);
     }
@@ -69,67 +103,107 @@ export default function Login() {
         style={styles.innerContainer}
       >
         <Text style={styles.title}>Welcome Back 👋</Text>
-        <Text style={styles.subtitle}>Login to your dashboard</Text>
+        <Text style={styles.subtitle}>
+          {step === 1
+            ? "Login to your dashboard"
+            : "Enter the OTP sent to your email"}
+        </Text>
 
         <View style={styles.card}>
-          {/* Email Input */}
-          <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={20} color="#9da3b4" />
-            <TextInput
-              placeholder="Email"
-              placeholderTextColor="#9da3b4"
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
+          {step === 1 ? (
+            <>
+              {/* Email */}
+              <View style={styles.inputContainer}>
+                <Ionicons name="mail-outline" size={20} color="#9da3b4" />
+                <TextInput
+                  placeholder="Email"
+                  placeholderTextColor="#9da3b4"
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
 
-          {/* Password Input */}
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="#9da3b4" />
-            <TextInput
-              placeholder="Password"
-              placeholderTextColor="#9da3b4"
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-          </View>
+              {/* Password */}
+              <View style={styles.inputContainer}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={20}
+                  color="#9da3b4"
+                />
+                <TextInput
+                  placeholder="Password"
+                  placeholderTextColor="#9da3b4"
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                />
+              </View>
 
-          <TouchableOpacity style={styles.forgotButton}>
-            <Text style={styles.forgotText}>Forgot Password?</Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.button}
+                onPress={handleLogin}
+                disabled={loading}
+              >
+                <LinearGradient
+                  colors={["#667eea", "#764ba2"]}
+                  style={styles.gradientButton}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Login</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              {/* OTP Input */}
+              <View style={styles.inputContainer}>
+                <Ionicons name="key-outline" size={20} color="#9da3b4" />
+                <TextInput
+                  placeholder="Enter OTP"
+                  placeholderTextColor="#9da3b4"
+                  style={styles.input}
+                  value={otp}
+                  onChangeText={setOtp}
+                  keyboardType="numeric"
+                />
+              </View>
 
-          {/* Login Button */}
-          <TouchableOpacity
-            style={styles.button}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            <LinearGradient
-              colors={["#667eea", "#764ba2"]}
-              style={styles.gradientButton}
+              <TouchableOpacity
+                style={styles.button}
+                onPress={handleVerifyOtp}
+                disabled={loading}
+              >
+                <LinearGradient
+                  colors={["#667eea", "#764ba2"]}
+                  style={styles.gradientButton}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Verify OTP</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {step === 1 && (
+            <TouchableOpacity
+              onPress={() => router.push("/")}
+              style={{ marginTop: 25 }}
             >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Login</Text>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* Register Link */}
-          <TouchableOpacity
-            onPress={() => router.push("/")}
-            style={{ marginTop: 25 }}
-          >
-            <Text style={styles.registerText}>
-              Don’t have an account? <Text style={styles.link}>Register</Text>
-            </Text>
-          </TouchableOpacity>
+              <Text style={styles.registerText}>
+                Don’t have an account? <Text style={styles.link}>Register</Text>
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </KeyboardAvoidingView>
     </LinearGradient>
@@ -137,9 +211,7 @@ export default function Login() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   innerContainer: {
     flex: 1,
     justifyContent: "center",
@@ -152,11 +224,7 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginBottom: 8,
   },
-  subtitle: {
-    fontSize: 16,
-    color: "#aaa",
-    marginBottom: 30,
-  },
+  subtitle: { fontSize: 16, color: "#aaa", marginBottom: 30 },
   card: {
     width: "100%",
     backgroundColor: "rgba(255,255,255,0.05)",
@@ -186,34 +254,13 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
   },
-  forgotButton: {
-    alignSelf: "flex-end",
-    marginBottom: 20,
-  },
-  forgotText: {
-    color: "#9da3b4",
-    fontWeight: "500",
-  },
-  button: {
-    borderRadius: 12,
-    overflow: "hidden",
-  },
+  button: { borderRadius: 12, overflow: "hidden" },
   gradientButton: {
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
   },
-  buttonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  registerText: {
-    color: "#9da3b4",
-    textAlign: "center",
-  },
-  link: {
-    color: "#a98bff",
-    fontWeight: "600",
-  },
+  buttonText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  registerText: { color: "#9da3b4", textAlign: "center" },
+  link: { color: "#a98bff", fontWeight: "600" },
 });
