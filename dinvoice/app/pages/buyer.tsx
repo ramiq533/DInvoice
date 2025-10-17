@@ -13,8 +13,8 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
-  Picker,
 } from "react-native";
+import { Picker } from "@react-native-picker/picker";
 
 const API_URL = "http://192.168.18.29:5000/api/buyers";
 const ITEMS_URL = "http://192.168.18.29:5000/api/items";
