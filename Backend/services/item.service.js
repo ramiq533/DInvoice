@@ -60,7 +60,16 @@ export const getAllItemsService = async () => {
 export const getItemByIdService = async (id) => {
   return await Item.findById(id);
 };
+// ✅ CREATE ITEM (missing before)
+//
+export const createItemService = async (data) => {
+  const errors = validateItemData(data);
+  if (errors.length > 0) throw new Error(errors.join(" | "));
 
+  const item = new Item(data);
+  await item.save();
+  return item;
+};
 // 🟧 Update Item
 export const updateItemService = async (id, data) => {
   const errors = validateItemData(data);

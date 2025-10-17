@@ -13,40 +13,27 @@ import {
   View,
   Alert,
 } from "react-native";
-import { Picker } from "@react-native-picker/picker"; // ✅ import picker
+import { Picker } from "@react-native-picker/picker";
 
+// ✅ CHANGE THIS to your computer's IP (same network as mobile)
 const BASE_URL = "http://192.168.18.29:5000/api/items";
 
 export default function Item() {
-  type Item = {
-    _id?: string;
-    itemName?: string;
-    hsCode?: string;
-    description?: string;
-    stTax?: number | string;
-    thirdSchedule?: boolean | string;
-    saleType?: string;
-    taxRate?: number | string;
-  };
-
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [editingItem, setEditingItem] = useState<Item | null>(null);
-  const [items, setItems] = useState<Item[]>([]);
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [items, setItems] = useState<any[]>([]);
   const slideAnim = useRef(new Animated.Value(-250)).current;
 
-  // ✅ Fetch all items
+  // Fetch items
   const fetchItems = async () => {
     try {
       const res = await fetch(BASE_URL);
-      const data = await res.json();
-      setItems(Array.isArray(data) ? data : data.items || []);
+      const json = await res.json();
+      const safeData = Array.isArray(json.data) ? json.data : [];
+      setItems(safeData);
     } catch (error) {
-      if (error instanceof Error) {
-        console.error("❌ Error fetching items:", error.message);
-      } else {
-        console.error("❌ Error fetching items:", error);
-      }
+      console.error(error);
       Alert.alert("Error", "Failed to fetch items from server.");
     }
   };
@@ -55,6 +42,7 @@ export default function Item() {
     fetchItems();
   }, []);
 
+  // Sidebar toggle
   const toggleSidebar = () => {
     Animated.timing(slideAnim, {
       toValue: sidebarVisible ? -250 : 0,
@@ -64,110 +52,108 @@ export default function Item() {
     setSidebarVisible(!sidebarVisible);
   };
 
-  // ✅ Delete
-  const handleDelete = async (id: string | undefined) => {
-    console.log("🗑 Attempting to delete ID:", id);
-    if (!id) return Alert.alert("Error", "Item ID missing");
+  // Delete item
+  const handleDelete = async (id: string) => {
+    console.log("Attempting to delete item id:", id);
 
     try {
-      const res = await fetch(`http://192.168.18.29:5000/api/items/${id}`, {
-        method: "DELETE",
-      });
-
+      const res = await fetch(`${BASE_URL}/${id}`, { method: "DELETE" });
       const data = await res.json();
-      console.log("📩 Response:", data);
+      console.log("Delete response:", data);
 
-      if (res.ok) {
-        Alert.alert("Success", "Item deleted successfully");
+      if (res.ok && data.success) {
+        // Remove the deleted item from state
         setItems((prev) => prev.filter((item) => item._id !== id));
+        console.log("Item deleted successfully");
       } else {
-        Alert.alert("Error", data.message || "Failed to delete item");
+        Alert.alert("Error", data.message || "Failed to delete item.");
       }
     } catch (err) {
       console.error("❌ Delete failed:", err);
-      Alert.alert("Error", "Network error while deleting");
+      Alert.alert("Error", "Cannot reach server. Check network.");
     }
   };
 
-  // ✅ Save (Add or Update)
+  // Save/Add item
   const handleSave = async () => {
-    if (!editingItem) {
-      Alert.alert("Error", "No item selected to save.");
+    if (!editingItem.itemName || !editingItem.hsCode || !editingItem.taxRate) {
+      Alert.alert("Error", "Item name, HS Code, and Tax Rate are required.");
       return;
     }
 
-    if (!editingItem.itemName || !editingItem.hsCode) {
-      Alert.alert("Error", "Item name and HS Code are required.");
-      return;
+    // Convert values
+    let thirdSchedule = editingItem.thirdSchedule === "Yes";
+    let taxRate = Number(editingItem.taxRate);
+    let saleType = editingItem.saleType;
+
+    // Backend rule: Third Schedule must be Retail & taxRate 18
+    if (thirdSchedule) {
+      if (saleType !== "Retail") {
+        Alert.alert(
+          "Warning",
+          "Third Schedule items must be Retail. Adjusted automatically."
+        );
+        saleType = "Retail";
+      }
+      if (taxRate !== 18) {
+        Alert.alert(
+          "Warning",
+          "Third Schedule items must have tax rate 18%. Adjusted automatically."
+        );
+        taxRate = 18;
+      }
     }
 
-    // ✅ Auto-fix logic for Third Schedule
-    let finalItem = { ...editingItem };
-    if (finalItem.thirdSchedule === "Yes" || finalItem.thirdSchedule === true) {
-      finalItem.thirdSchedule = true;
-      finalItem.saleType = "Retail"; // ✅ Force retail
-      finalItem.taxRate = 18; // ✅ Standard rate
-    } else {
-      finalItem.thirdSchedule = false;
-      finalItem.taxRate = Number(
-        finalItem.taxRate?.toString().replace("%", "").trim() || 0
-      );
-    }
-
-    // Convert stTax to number
-    finalItem.stTax = Number(finalItem.stTax || 0);
-
-    const url = finalItem._id ? `${BASE_URL}/${finalItem._id}` : BASE_URL;
-    const method = finalItem._id ? "PUT" : "POST";
+    const payload = {
+      ...editingItem,
+      thirdSchedule,
+      taxRate,
+      saleType,
+    };
 
     try {
+      const url = editingItem._id ? `${BASE_URL}/${editingItem._id}` : BASE_URL;
+      const method = editingItem._id ? "PUT" : "POST";
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(finalItem),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
-      console.log("📩 Response:", data);
-
-      if (res.ok) {
+      if (data.success) {
         setModalVisible(false);
         fetchItems();
       } else {
         Alert.alert("Error", data.message || "Failed to save item.");
       }
-    } catch (error) {
-      console.error("❌ Save failed:", error);
+    } catch (err) {
+      console.error(err);
       Alert.alert("Error", "Server connection issue.");
     }
   };
 
+  // Add new
   const handleAddNew = () => {
     setEditingItem({
       itemName: "",
       hsCode: "",
       description: "",
       stTax: "",
-      thirdSchedule: "",
-      saleType: "",
+      thirdSchedule: "No",
+      saleType: "Retail",
       taxRate: "",
     });
     setModalVisible(true);
   };
 
-  const handleEdit = (
-    item: React.SetStateAction<{
-      _id?: string;
-      itemName?: string;
-      hsCode?: string;
-      description?: string;
-      stTax?: number | string;
-      thirdSchedule?: boolean | string;
-      saleType?: string;
-      taxRate?: number | string;
-    } | null>
-  ) => {
-    setEditingItem(item);
+  // Edit existing
+  const handleEdit = (item: any) => {
+    setEditingItem({
+      ...item,
+      thirdSchedule: item.thirdSchedule ? "Yes" : "No",
+    });
     setModalVisible(true);
   };
 
@@ -187,7 +173,6 @@ export default function Item() {
       {sidebarVisible && (
         <TouchableOpacity style={styles.overlay} onPress={toggleSidebar} />
       )}
-
       <Animated.View
         style={[styles.sidebar, { transform: [{ translateX: slideAnim }] }]}
       >
@@ -205,7 +190,7 @@ export default function Item() {
         </View>
 
         {/* TABLE */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+        <ScrollView horizontal>
           <View style={styles.tableWrapper}>
             <View style={[styles.tableRow, styles.tableHeader]}>
               {[
@@ -268,7 +253,7 @@ export default function Item() {
         </ScrollView>
       </ScrollView>
 
-      {/* ADD / EDIT MODAL */}
+      {/* MODAL */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -277,102 +262,60 @@ export default function Item() {
             </Text>
 
             {/* Inputs */}
-            {(
-              [
-                "itemName",
-                "hsCode",
-                "description",
-                "stTax",
-                "taxRate",
-              ] as (keyof Item)[]
-            ).map((field) => (
-              <TextInput
-                key={field}
-                placeholder={field.replace(/([A-Z])/g, " $1")}
-                placeholderTextColor="#aaa"
-                style={styles.input}
-                keyboardType={
-                  field === "stTax" || field === "taxRate"
-                    ? "numeric"
-                    : "default"
-                }
-                editable={
-                  field === "taxRate"
-                    ? !(
-                        editingItem?.thirdSchedule === "Yes" ||
-                        editingItem?.thirdSchedule === true
-                      )
-                    : true
-                }
-                value={
-                  (
-                    editingItem?.[field] as string | number | undefined
-                  )?.toString() || ""
-                }
-                onChangeText={(val) =>
-                  setEditingItem(
-                    (prev) => ({ ...(prev || {}), [field]: val } as Item)
-                  )
-                }
-              />
-            ))}
-
-            {/* Third Schedule */}
-            <Text style={styles.label}>Third Schedule</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={editingItem?.thirdSchedule || ""}
-                onValueChange={(val) => {
-                  if (val === "Yes") {
-                    setEditingItem({
-                      ...editingItem,
-                      thirdSchedule: "Yes",
-                      saleType: "Retail",
-                      taxRate: "18",
-                    });
-                  } else {
-                    setEditingItem({
-                      ...editingItem,
-                      thirdSchedule: "No",
-                      taxRate: "",
-                    });
+            {["itemName", "hsCode", "description", "stTax", "taxRate"].map(
+              (field) => (
+                <TextInput
+                  key={field}
+                  placeholder={field.replace(/([A-Z])/g, " $1")}
+                  placeholderTextColor="#aaa"
+                  style={styles.input}
+                  value={editingItem?.[field]?.toString() || ""}
+                  keyboardType={
+                    field === "stTax" || field === "taxRate"
+                      ? "numeric"
+                      : "default"
                   }
-                }}
+                  onChangeText={(val) =>
+                    setEditingItem({ ...editingItem, [field]: val })
+                  }
+                />
+              )
+            )}
+
+            {/* Third Schedule Picker */}
+            <Text style={{ color: "#fff", marginBottom: 5 }}>
+              Third Schedule
+            </Text>
+            <View style={styles.pickerWrapper}>
+              <Picker
+                selectedValue={editingItem?.thirdSchedule || "No"}
+                onValueChange={(val) =>
+                  setEditingItem({ ...editingItem, thirdSchedule: val })
+                }
                 style={styles.picker}
-                dropdownIconColor="#fff"
               >
-                <Picker.Item label="Select..." value="" />
-                <Picker.Item label="Yes" value="Yes" />
                 <Picker.Item label="No" value="No" />
+                <Picker.Item label="Yes" value="Yes" />
               </Picker>
             </View>
 
-            {/* Sale Type */}
-            <Text style={styles.label}>Sale Type</Text>
-            <View style={styles.pickerContainer}>
+            {/* Sale Type Picker */}
+            <Text style={{ color: "#fff", marginBottom: 5 }}>Sale Type</Text>
+            <View style={styles.pickerWrapper}>
               <Picker
-                selectedValue={editingItem?.saleType || ""}
-                enabled={
-                  !(
-                    editingItem?.thirdSchedule === "Yes" ||
-                    editingItem?.thirdSchedule === true
-                  )
-                }
+                selectedValue={editingItem?.saleType || "Retail"}
                 onValueChange={(val) =>
                   setEditingItem({ ...editingItem, saleType: val })
                 }
                 style={styles.picker}
-                dropdownIconColor="#fff"
               >
-                <Picker.Item label="Select..." value="" />
                 <Picker.Item label="Retail" value="Retail" />
                 <Picker.Item label="Wholesale" value="Wholesale" />
-                <Picker.Item label="Export" value="Export" />
                 <Picker.Item label="Service" value="Service" />
               </Picker>
             </View>
 
-            {/* Buttons */}
+            {/* Modal Actions */}
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.actionBtn, { backgroundColor: "#1E88E5" }]}
@@ -394,7 +337,7 @@ export default function Item() {
   );
 }
 
-// 🎨 Styles (unchanged)
+// Styles
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { padding: 20, paddingTop: 10 },
@@ -471,7 +414,6 @@ const styles = StyleSheet.create({
     width: "90%",
   },
   modalTitle: { color: "#fff", fontSize: 18, marginBottom: 10 },
-  label: { color: "#fff", marginBottom: 5, marginTop: 5 },
   input: {
     backgroundColor: "#334155",
     color: "#fff",
@@ -479,20 +421,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 10,
   },
-  pickerContainer: {
-    backgroundColor: "#334155",
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  picker: { color: "#fff" },
   modalActions: {
     flexDirection: "row",
     justifyContent: "space-around",
     marginTop: 10,
   },
-  actionBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 6,
+  actionBtn: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 6 },
+  pickerWrapper: {
+    backgroundColor: "#334155",
+    borderRadius: 8,
+    marginBottom: 10,
   },
+  picker: { color: "#fff" },
 });
