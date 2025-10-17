@@ -256,7 +256,7 @@ export default function Buyer() {
             </Text>
             <Picker
               selectedValue={editingBuyer?.itemNames?.[0] || ""}
-              onValueChange={(val) =>
+              onValueChange={(val: any) =>
                 setEditingBuyer({ ...editingBuyer, itemNames: [val] })
               }
               style={{
