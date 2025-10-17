@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/userManagement.routes.js";
-
+import itemRoutes from "./routes/item.routes.js";
 dotenv.config();
 
 // ✅ Connect to MongoDB
@@ -19,7 +19,7 @@ app.use(express.json());
 // ✅ API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
-
+app.use("/api/items", itemRoutes);
 // ✅ Root route
 app.get("/", (req, res) => {
   res.send("🚀 DInvoice Backend API is running successfully!");
