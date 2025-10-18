@@ -27,7 +27,7 @@ export default function Login() {
     try {
       setLoading(true);
 
-      const res = await fetch("http://192.168.18.29:5000/api/auth/login", {
+      const res = await fetch("http://192.168.18.36:5000/api/auth/login", {
         // ⚠️ Use your backend IP if testing on phone:
         // e.g. "http://192.168.1.100:5000/api/auth/login"
         method: "POST",
